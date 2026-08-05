@@ -35,7 +35,7 @@ await functions.query('INSERT INTO post_comments(user_id, post_id, content) VALU
 await redis.sadd(`post_unique_commenters:${postId}`, userId);
 await post_queue.add('process_new_comment', { post_id, user_id, content }); // 나머지는 워커로
 ```
-워커(`postWorker`)가 `comment_count`/`like_count`를 증분하고, 알림을 보낸 뒤 `update_trending_rank`로 **점수를 즉시 재계산**한다.
+워커(`postWorker`)가 `comment_count`/`like_count`를 증분하고, 알림을 보낸 뒤 `updateTrendingRank`로 **점수를 즉시 재계산**한다.
 
 ### 🚨 신고 — 멱등 집계 + 즉시 강등
 동일 유저의 중복 신고는 UNIQUE 제약으로 막고, `report_count`는 증분이 아니라 **`COUNT(*)` 재계산**으로 맞춘다(워커 크래시에도 안 꼬이는 멱등 동기화). 이후 페널티가 반영된 점수로 즉시 강등.
@@ -44,7 +44,7 @@ await funcs.query(
   `INSERT IGNORE INTO post_reports (post_id, user_id, reason, ...) VALUES (?,?,?, ...)`, ...);
 await funcs.query( // 멱등: 누적값을 신뢰하지 않고 매번 실측으로 덮어씀
   `UPDATE user_posts SET report_count = (SELECT COUNT(*) FROM post_reports WHERE post_id = ?) WHERE post_id = ?`, ...);
-await update_trending_rank(funcs, redis, postId); // 페널티 적용 → 랭킹 강등
+await updateTrendingRank(funcs, redis, postId); // 페널티 적용 → 랭킹 강등
 ```
 
 ---
@@ -52,7 +52,7 @@ await update_trending_rank(funcs, redis, postId); // 페널티 적용 → 랭킹
 ## 트렌딩 점수 산식
 로그 스케일 참여도(메가히트 억제) + 선형 시간 감쇠(12시간마다 리셋되며 뒤집으려면 10배의 참여 필요) + 신고 페널티.
 ```js
-function calculate_popular_score(like, comment, touch, report, created_at) {
+function calculatePopularScore(like, comment, touch, report, created_at) {
   const engagement = like * 3 + comment * 5 + touch * 1;
 
   // 신고 페널티 — 베이지안 라플라스 스무딩(α=100)으로 신규글 '좌표찍기 테러' 방어
@@ -68,7 +68,7 @@ function calculate_popular_score(like, comment, touch, report, created_at) {
   return order + (seconds - 1704067200) / 43200; // 43200초 = 12시간 감쇠 주기
 }
 ```
-`update_trending_rank`가 이 점수로 ZSET을 갱신하고 Top-1000만 남긴다.
+`updateTrendingRank`가 이 점수로 ZSET을 갱신하고 Top-1000만 남긴다.
 ```js
 await redis.zadd(`ranking:popular_posts:0`, new_score, postId);        // 전체
 await redis.zremrangebyrank(`ranking:popular_posts:0`, 0, -1001);       // 메모리: Top-1000 초과 방출
@@ -81,7 +81,7 @@ if (label_index > 0) await redis.zadd(`ranking:popular_posts:${label_index}`, ne
 const lock = await redis.set('lock:dirty_posts_batch', '1', 'EX', 15, 'NX');
 if (!lock) return; // 다른 인스턴스가 처리 중 → 스킵
 const ids = await redis.spop('dirty_posts:ranking', 100); // 쌓인 걸 한 번에 꺼냄
-for (const id of ids) await update_trending_rank(funcs, redis, id);
+for (const id of ids) await updateTrendingRank(funcs, redis, id);
 // finally에서 무조건 락 해제 (좀비 락 방지)
 ```
 
