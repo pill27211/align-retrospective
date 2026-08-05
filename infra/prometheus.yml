@@ -1,0 +1,90 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # Prometheus 자체 모니터링
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Node Exporter (시스템 메트릭)
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    relabel_configs:
+      - source_labels: [__address__]
+        regex: '([^:]+):\d+'
+        target_label: instance
+        replacement: '${1}'
+
+  # Main Server - 직접 지정
+  - job_name: 'main-server'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: 
+        - 'gh-server-main-server-1:60007'
+        - 'gh-server-main-server-2:60007'
+    relabel_configs:
+      - source_labels: [__address__]
+        regex: '([^:]+):\d+'
+        target_label: instance
+        replacement: '${1}'
+      # instance 값이 gh-server-main-server-1 이면 '서버 1'로 덮어쓰기
+      - source_labels: [instance]
+        regex: 'gh-server-main-server-1'
+        target_label: instance
+        replacement: '서버 1'
+      # instance 값이 gh-server-main-server-2 이면 '서버 2'로 덮어쓰기
+      - source_labels: [instance]
+        regex: 'gh-server-main-server-2'
+        target_label: instance
+        replacement: '서버 2'
+
+  # Message Server - 직접 지정
+  - job_name: 'message-server'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: 
+        - 'gh-server-message-server-1:60008'
+        - 'gh-server-message-server-2:60008'
+    relabel_configs:
+      - source_labels: [__address__]
+        regex: '([^:]+):\d+'
+        target_label: instance
+        replacement: '${1}'
+      # instance 값이 gh-server-message-server-1 이면 '서버 1'로 덮어쓰기
+      - source_labels: [instance]
+        regex: 'gh-server-message-server-1'
+        target_label: instance
+        replacement: '서버 1'
+      # instance 값이 gh-server-message-server-2 이면 '서버 2'로 덮어쓰기
+      - source_labels: [instance]
+        regex: 'gh-server-message-server-2'
+        target_label: instance
+        replacement: '서버 2'
+
+
+  # Redis 개별 노드 메트릭 수집 (마스터 + 레플리카)
+  - job_name: 'redis_nodes'
+    metrics_path: /scrape
+    static_configs:
+      - targets:
+        - 'redis://redis-master:6379'
+        - 'redis://redis-replica-1:6379'
+        - 'redis://redis-replica-2:6379'
+    relabel_configs:
+      # __address__ 값을 __param_target 으로 전달
+      - source_labels: [__address__]
+        target_label: __param_target
+      # __param_target 값을 instance 레이블로 사용
+      - source_labels: [__param_target]
+        target_label: instance
+        regex: 'redis://([^:]+):\d+'
+        replacement: '${1}'
+      # 실제 요청은 redis-exporter:9121 로 전송
+      - target_label: __address__
+        replacement: 'redis-exporter:9121'
+    # 각 Redis 노드에 인증 정보가 필요한 경우 (선택사항)
+    params:
+      password: ['${REDIS_PASSWORD}']

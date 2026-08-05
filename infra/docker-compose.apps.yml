@@ -1,0 +1,175 @@
+# ⚠️ 로컬 개발용 오케스트레이션입니다 (소스 볼륨 마운트 + nodemon 핫리로드).
+#   운영 배포는 빌드된 이미지에서 소스 볼륨 없이 `npm run start`(= node)로 실행합니다.
+#   (package.json: start:* = node / dev:* = nodemon) — 자세한 내용은 infra/README.md 참고
+version: '3.8'
+
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "20m"
+    max-file: "3"
+
+services:
+  main-server:
+    build: .
+    image: travel-backend:latest
+    command: nodemon --exec npm run start:main
+    expose:
+      - "60007"
+    deploy:
+      mode: replicated
+      replicas: 2
+    logging: *default-logging
+    environment:
+      - TZ=Asia/Seoul
+      - NODE_ENV=development
+      - MAIN_PORT=60007
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - DB_HOST=${DB_HOST}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      - DB_PORT=3306
+      - MONGODB_URI=${MONGODB_URI}
+      - SERVER_NAME=Travel
+      - LOG_RETENTION_DAYS=30
+      - OTEL_SERVICE_NAME=gh-main-server
+      - OTLP_ENDPOINT=http://jaeger:4318/v1/traces
+      - NODE_OPTIONS=--max-old-space-size=256
+    restart: unless-stopped
+    volumes:
+      - .:/usr/src/app
+      - node_modules_data:/usr/src/app/node_modules
+      - /home/GH-Server/logging/logs:/usr/src/app/logging/logs
+    networks:
+      - travel-network
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:60007/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  message-server:
+    image: travel-backend:latest
+    command: nodemon --exec "npm run start:message"
+    expose:
+      - "60008"
+    deploy:
+      mode: replicated
+      replicas: 2
+    logging: *default-logging
+    environment:
+      - TZ=Asia/Seoul
+      - NODE_ENV=development
+      - MESSAGE_PORT=60008
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - DB_HOST=${DB_HOST}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      - DB_PORT=3306
+      - MONGODB_URI=${MONGODB_URI}
+      - SERVER_NAME=Travel
+      - LOG_RETENTION_DAYS=30
+      - OTEL_SERVICE_NAME=gh-message-server
+      - OTLP_ENDPOINT=http://jaeger:4318/v1/traces
+      - NODE_OPTIONS=--max-old-space-size=256
+    restart: unless-stopped
+    volumes:
+      - .:/usr/src/app
+      - node_modules_data:/usr/src/app/node_modules
+      - /home/GH-Server/logging/logs:/usr/src/app/logging/logs
+    depends_on:
+      - main-server
+    networks:
+      - travel-network
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:60008/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  upload-server:
+    image: travel-backend:latest
+    command: nodemon --exec npm run start:upload
+    ports:
+      - "60006:60006"
+    logging: *default-logging
+    environment:
+      - TZ=Asia/Seoul
+      - NODE_ENV=development
+      - UPLOAD_PORT=60006
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - DB_HOST=${DB_HOST}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      - DB_PORT=3306
+      - MONGODB_URI=${MONGODB_URI}
+      - SERVER_NAME=Travel
+      - LOG_RETENTION_DAYS=30
+      - OTEL_SERVICE_NAME=gh-upload-server
+      - OTLP_ENDPOINT=http://jaeger:4318/v1/traces
+      - NODE_OPTIONS=--max-old-space-size=256
+    restart: unless-stopped
+    volumes:
+      - .:/usr/src/app
+      - node_modules_data:/usr/src/app/node_modules
+      - /home/GH-Server/logging/logs:/usr/src/app/logging/logs
+      - /home/pre-house-data:/home/pre-house-data
+    depends_on:
+      - main-server
+    networks:
+      - travel-network
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"require('http').get('http://localhost:60006/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  worker-server:
+    image: travel-backend:latest
+    command: nodemon --exec npm run start:worker
+    logging: *default-logging
+    environment:
+      - TZ=Asia/Seoul
+      - NODE_ENV=development
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - DB_HOST=${DB_HOST}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      - DB_PORT=3306
+      - MONGODB_URI=${MONGODB_URI}
+      - SERVER_NAME=Worker
+      - LOG_RETENTION_DAYS=30
+      - OTEL_SERVICE_NAME=gh-worker-server
+      - OTLP_ENDPOINT=http://jaeger:4318/v1/traces
+      - NODE_OPTIONS=--max-old-space-size=256
+    restart: unless-stopped
+    volumes:
+      - .:/usr/src/app
+      - node_modules_data:/usr/src/app/node_modules
+      - /home/GH-Server/logging/logs:/usr/src/app/logging/logs
+    depends_on:
+      - main-server
+    networks:
+      - travel-network
+
+volumes:
+  node_modules_data:
+
+networks:
+  travel-network:
+    external: true

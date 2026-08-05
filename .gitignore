@@ -1,0 +1,21 @@
+# 의존성
+node_modules/
+
+# 환경변수 · 시크릿 (절대 커밋 금지)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Firebase 서비스 계정 비공개 키 (예시 파일만 커밋)
+**/serviceAccountKey.json
+!**/serviceAccountKey.example.json
+
+# 로그
+logging/logs/
+*.log
+
+# DB 스키마 덤프 · 인증 파일
+**/*.htpasswd
+**/DDL*.txt
