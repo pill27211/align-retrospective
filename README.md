@@ -30,8 +30,7 @@
   </tr>
 </table>
 
-> 🎨 화면 **디자인은 남궁찬**, **프론트엔드는 이진수([@kiwijuse](https://github.com/kiwijuse))** 가 담당했습니다. 이 저장소는 **백엔드·인프라 관점의 회고**입니다. <br>
-보다 자세한 프론트엔드측 회고는 [이곳](https://github.com/kiwijuse/yeohaenghage)에서 확인할 수 있습니다.
+> 🎨 화면 **디자인은 남궁찬**, **프론트엔드는 이진수([@kiwijuse](https://github.com/kiwijuse))** 가 담당했습니다. 이 저장소는 **백엔드·인프라 관점의 회고**입니다. 보다 자세한 프론트엔드측 회고는 [이곳](https://github.com/kiwijuse/yeohaenghage)에서 확인할 수 있습니다.
 
 ---
 
